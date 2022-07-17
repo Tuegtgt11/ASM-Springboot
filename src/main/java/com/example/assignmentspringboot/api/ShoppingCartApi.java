@@ -1,33 +1,76 @@
 package com.example.assignmentspringboot.api;
 
-import com.example.assignmentspringboot.service.OrderService;
-import lombok.extern.slf4j.Slf4j;
+import com.example.assignmentspringboot.entity.CartItem;
+import com.example.assignmentspringboot.entity.CartItemId;
+import com.example.assignmentspringboot.entity.Product;
+import com.example.assignmentspringboot.entity.ShoppingCart;
+import com.example.assignmentspringboot.entity.dto.CartItemDTO;
+import com.example.assignmentspringboot.entity.dto.ShoppingCartDTO;
+import com.example.assignmentspringboot.repository.ProductRepository;
+import com.example.assignmentspringboot.repository.ShoppingCartRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.repository.query.Param;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-@RequestMapping(path = "api/v1/carts")
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
 @RestController
-@CrossOrigin("*")
-@Slf4j
+@RequestMapping(path = "api/v1")
 public class ShoppingCartApi {
-    @Autowired
-    OrderService orderService;
 
-    @RequestMapping(method = RequestMethod.GET)
-    public ResponseEntity<?> show(@Param("userId") int userId){
-        log.info("UserId: " + userId);
-        return ResponseEntity.status(HttpStatus.OK).body(orderService.findShoppingCartByUserId(userId)) ;
+    @Autowired
+    ShoppingCartRepository shoppingCartRepository;
+
+    @Autowired
+    ProductRepository productRepository;
+
+    @RequestMapping(method = RequestMethod.POST, path = "add-to-cart")
+    public void saveCart(@RequestParam String userId, @RequestBody ShoppingCartDTO shoppingCartDTO){
+        boolean hasException = false;
+        ShoppingCart shoppingCart = ShoppingCart.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(userId)
+                .shipName(shoppingCartDTO.getShipName())
+                .shipAddress(shoppingCartDTO.getShipAddress())
+                .shipNote(shoppingCartDTO.getShipNote())
+                .shipPhone(shoppingCartDTO.getShipPhone())
+                .isShoppingCart(true)
+                .build();
+        Set<CartItem> setCartItem = new HashSet<>();
+        System.out.println(shoppingCart.getId());
+        for (CartItemDTO cartItemDTO :
+                shoppingCartDTO.getItems()) {
+            Optional<Product> optionalProduct = productRepository.findById(cartItemDTO.getProductId());
+            if(!optionalProduct.isPresent()){
+                hasException = true;
+                break;
+            }
+            Product product = optionalProduct.get();
+            CartItem cartItem = CartItem.builder()
+                    .id(new CartItemId(shoppingCart.getId(), product.getProductId()))
+                    .productName(product.getName())
+                    .productImage(product.getThumbnails())
+                    .quantity(cartItemDTO.getQuantity())
+                    .unitPrice(product.getPrice())
+                    .shoppingCart(shoppingCart)
+                    .build();
+
+            shoppingCart.addTotalPrice(cartItem); // add tổng giá bigdecimal
+            setCartItem.add(cartItem);
+        }
+        shoppingCart.setItems(setCartItem);
+        shoppingCartRepository.save(shoppingCart);
     }
 
-    @RequestMapping(method = RequestMethod.GET, path = "/add")
-    public ResponseEntity<?> show(@Param("userId") int userId, @Param("productId") String productId, @Param("quantity") int quantity){
-        orderService.addShoppingCart(userId, productId, quantity);
-        return ResponseEntity.status(HttpStatus.OK).body(orderService.findShoppingCartByUserId(userId)) ;
+    @RequestMapping(method = RequestMethod.POST, path = "orders")
+    public void order(@RequestParam String shoppingCartId){
+        Optional<ShoppingCart> shoppingCart = shoppingCartRepository.findById(shoppingCartId);
+        if (shoppingCart.isPresent()){
+          ShoppingCart shoppingCart1 = shoppingCart.get();
+          shoppingCart1.setIsShoppingCart(false);
+            shoppingCartRepository.save(shoppingCart1);
+        }
     }
 }

@@ -1,12 +1,12 @@
 package com.example.assignmentspringboot.repository;
 
-import com.example.assignmentspringboot.entity.Account;
+import com.example.assignmentspringboot.entity.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface AccountRepository extends JpaRepository<Account, Long> {
-    Optional<Account> findByUsername(String username);
+public interface RoleRepository extends JpaRepository<Role, Integer> {
+    Optional<Role> findByName(String name);
 }

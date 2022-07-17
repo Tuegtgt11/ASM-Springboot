@@ -1,8 +1,8 @@
 package com.example.assignmentspringboot.config;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.example.assignmentspringboot.util.JWTUtil;
-import com.google.gson.Gson;
+import com.example.assignmentspringboot.util.JwtUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -18,57 +18,52 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.*;
 
+import static java.util.Arrays.stream;
+
+// this filter will run first with all request
+// here we get the token from user then assign role for them
 public class ApiAuthorizationFilter extends OncePerRequestFilter {
-    private static final String[] IGNORE_PATH = {"/api/v1/accounts/login", "/api/v1/accounts/register", "/api/v1/products", "/api/v1/products/search"};
+    private static final String[] IGNORE_PATHS = {"/api/v1/login", "/api/v1/register", "/api/v1/token/refresh"};
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        // nếu client gửi request đến 1 trong các url được bỏ qua thì không cần xử lý
+        //let login and register pass through
         String requestPath = request.getServletPath();
-        if (Arrays.asList(IGNORE_PATH).contains(requestPath)) {
-            // cho qua
+        if (Arrays.asList(IGNORE_PATHS).contains(requestPath)) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        // trường hợp client không có request header theo format cần thiết
         String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            // cho qua (không có dấu kiểm duyệt)
             filterChain.doFilter(request, response);
             return;
         }
-
-        //lấy token từ request header
+        //get token in header then decode jwt token to get username and roles -> then set roles for request
         try {
-            // remove chữ Bearer
             String token = authorizationHeader.replace("Bearer", "").trim();
-
-            // dịch ngược JWT
-            DecodedJWT decodedJWT = JWTUtil.getDecodedJwt(token);
-
-            // lấy thông tin username
+            DecodedJWT decodedJWT = JwtUtil.getDecodedJwt(token);
             String username = decodedJWT.getSubject();
 
-            //lấy thông tin của role đăng nhập
-            String role = decodedJWT.getClaim(JWTUtil.ROLE_CLAIM_KEY).asString();
+            String[] roles = decodedJWT.getClaim(JwtUtil.ROLE_CLAIM_KEY).asArray(String.class);
 
-            // tạo danh sách các role
             Collection<SimpleGrantedAuthority> authorities = new ArrayList<>();
-            authorities.add(new SimpleGrantedAuthority(role));
 
-            // lưu thông tin nguời dùng đăng nhập vào spring context
-            // để cho các controller hay filter có thể sử dụng
-            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(username, null, authorities);
+            stream(roles).forEach(role -> {
+                authorities.add(new SimpleGrantedAuthority(role));
+            });
+
+            UsernamePasswordAuthenticationToken authenticationToken =
+                    new UsernamePasswordAuthenticationToken(username, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
             filterChain.doFilter(request, response);
-
-        } catch (Exception e) {
+        } catch (Exception ex) {
+            //show error
+            System.err.println(ex.getMessage());
             response.setStatus(HttpStatus.FORBIDDEN.value());
             Map<String, String> errors = new HashMap<>();
-            errors.put("message", e.getMessage());
+            errors.put("error", ex.getMessage());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write(new Gson().toJson(errors));
+            new ObjectMapper().writeValue(response.getOutputStream(), errors);
         }
     }
 }

@@ -1,36 +1,66 @@
 package com.example.assignmentspringboot.entity;
 
 import com.example.assignmentspringboot.entity.base.BaseEntity;
-import com.example.assignmentspringboot.entity.myenum.ProductStatus;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import lombok.AllArgsConstructor;
+import com.example.assignmentspringboot.entity.enums.ProductSimpleStatus;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
-@Setter
 @Getter
-@AllArgsConstructor
-@NoArgsConstructor
+@Setter
+@ToString
+//@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "products")
 public class Product extends BaseEntity {
     @Id
-    private String id;
+//    @GeneratedValue(generator = "uuid")
+//    @GenericGenerator(name = "uuid", strategy = "uuid2")
+//    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private String productId;
     private String name;
-    private BigDecimal price;
-    private String description;
-    @Lob
+//    private String slug;
+//    private String description;
     private String detail; // text
-    private String thumbnails;
+    private String thumbnails; // nhiều ảnh cách nhau bởi dấu ,
+    private BigDecimal price;
     @Enumerated(EnumType.ORDINAL)
-    private ProductStatus status;
-    @ManyToOne(cascade = CascadeType.MERGE)
-    @JoinColumn(name = "category_id")
-    @JsonManagedReference
-    private Category category;
+    private ProductSimpleStatus status;
 
+    public Product(){
+        this.setCreatedAt(LocalDateTime.now());
+        this.setUpdatedAt(LocalDateTime.now());
+    }
+
+    public Product(String productId, String name, String detail, String thumbnails, BigDecimal price, ProductSimpleStatus status) {
+        this.productId = productId;
+        this.name = name;
+        this.detail = detail;
+        this.thumbnails = thumbnails;
+        this.price = price;
+        this.status = status;
+    }
+
+
+//    @Basic
+//    private int status;
+//    @Transient
+//    private ProductStatus productStatus;
+//
+//    @PostLoad // khi load
+//    void fillTransient() {
+//        this.productStatus = ProductStatus.of(status); // chuyển dữ liệu dạng số ở trong database về kiểu enum
+//    }
+//
+//    @PrePersist // trước khi lưu
+//    void fillPersistent() {
+//        // đưa giá trị của product status vào trường status.
+//        this.status = this.productStatus.getValue();
+//    }
 }

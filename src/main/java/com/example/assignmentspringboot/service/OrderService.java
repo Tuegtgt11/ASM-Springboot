@@ -1,58 +1,75 @@
 package com.example.assignmentspringboot.service;
 
 import com.example.assignmentspringboot.entity.Order;
-import com.example.assignmentspringboot.entity.OrderDetail;
-import com.example.assignmentspringboot.entity.Product;
+import com.example.assignmentspringboot.entity.search.*;
 import com.example.assignmentspringboot.repository.OrderRepository;
-import com.example.assignmentspringboot.repository.ProductRepository;
-import lombok.RequiredArgsConstructor;
+import com.example.assignmentspringboot.util.ConvertDateHelper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static com.example.assignmentspringboot.entity.search.SearchCriteriaOperator.*;
 
 @Service
-@RequiredArgsConstructor
-public class OrderService{
+public class OrderService {
     final OrderRepository orderRepository;
-    final ProductRepository productRepository;
 
+    public OrderService(OrderRepository orderRepository) {
 
-    public Order findShoppingCartByUserId(int userId){
-       return orderRepository.getShoppingCart(userId);
+        this.orderRepository = orderRepository;
     }
 
-    public Order addShoppingCart(int userId, String productId, int quantity) {
-        Optional<Product> optionalProduct = productRepository.findById(productId);
-        if(!optionalProduct.isPresent()){
-            return null;
+    public Map<String, Object> findAll(SearchBody searchBody){
+        Specification specification = Specification.where(null);
+
+        if (searchBody.getNameUser() != null && searchBody.getNameUser().length() > 0 ){
+            specification = specification.and(new OrderSpecification(new SearchCriteria("fullName", JOIN_USER, searchBody.getNameUser())));
         }
-        Order order = orderRepository.getShoppingCart(userId);
-        Set<OrderDetail> orderDetails = order.getOrderDetails();
-//        HashMap<Long, OrderDetail> map = new HashMap<Long, OrderDetail>();
-//        //fill in map
-//        for(OrderDetail entry : orderDetails)
-//        {
-//            map.put(entry.getProduct().getId(), entry);
-//        }
-//
-//        for (int i =0 ; i < orderDetails.size() - 1 ;i++){
-//            //neu chua co sp trong gio hang thi them vao
-//            // con co roi thi cong don ok
-//        }
-        boolean exist = false;
-        for(OrderDetail entry : orderDetails)
-        {
-            if(entry.getProduct().getId().equals(productId)){
-                entry.setQuantity(entry.getQuantity() + quantity);
-                exist = true;
+        if (searchBody.getPhone() != null && searchBody.getPhone().length() > 0){
+            specification = specification.and(new OrderSpecification(new SearchCriteria("phone",JOIN_USER, searchBody.getPhone())));
+        }
+        if (searchBody.getNameProduct() != null && searchBody.getNameProduct().length() > 0){
+            specification = specification.and(new OrderSpecification(new SearchCriteria("name",JOIN_DETAIL_PRODUCT, searchBody.getNameProduct())));
+        }
+        if (searchBody.getOrderId() != null && searchBody.getOrderId().length() > 0){
+            specification = specification.and(new OrderSpecification(new SearchCriteria("id", LIKE,searchBody.getOrderId())));
+        }
+        if (searchBody.getStart() != null && searchBody.getStart().length() > 0){
+//            log.info("check start: " + orderSearchBody.getStart() );
+//            log.info("Check Start begin" + searchBody.getStart());
+
+            LocalDateTime date = ConvertDateHelper.convertStringToLocalDateTime(searchBody.getStart());
+//            log.info("Check Start" + date);
+//            log.info("check start convert date: " + date );
+            specification = specification.and(new OrderSpecification(new SearchCriteria("createdAt", GREATER_THAN_OR_EQUALS,date)));
+        }
+        if (searchBody.getEnd() != null && searchBody.getEnd().length() > 0){
+            LocalDateTime date = ConvertDateHelper.convertStringToLocalDateTime(searchBody.getEnd());
+            specification = specification.and(new OrderSpecification(new SearchCriteria("createdAt", LESS_THAN_OR_EQUALS,date)));
+        }
+
+        Sort sort= Sort.by(Sort.Order.asc("id"));
+        if (searchBody.getSort() !=null && searchBody.getSort().length() >0){
+            if (searchBody.getSort().contains("desc")){
+                sort = Sort.by(Sort.Order.desc("id"));
             }
         }
-        if(!exist){
-            OrderDetail orderDetail = new OrderDetail();
-            orderDetails.add(orderDetail);
-        }
-        //save
-         return order;
+        Pageable pageable = PageRequest.of(searchBody.getPage() -1, searchBody.getLimit(),sort );
+        Page<Order> pageOrder = orderRepository.findAll(specification,pageable);
+        List<Order> orderList = pageOrder.getContent();
+        Map<String, Object> responses = new HashMap<>();
+        responses.put("content",orderList);
+        responses.put("currentPage",pageOrder.getNumber() + 1);
+        responses.put("totalItems",pageOrder.getTotalElements());
+        responses.put("totalPage",pageOrder.getTotalPages());
+        return responses;
     }
 }
